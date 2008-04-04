@@ -1,0 +1,10 @@
+This directory contains a CLISP add-on module for regular expression matching
+and searching.
+The library routines regex.[ch] come from the GNU gnulib.
+
+To use it, add "regexp" to MODULES in Makefile in your build directory
+and type
+    $ make regexp && make full
+there.
+Try it with
+    $ ./clisp -K full

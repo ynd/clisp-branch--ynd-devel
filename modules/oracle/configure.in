@@ -1,0 +1,35 @@
+#
+# configure.ac - Input to autoconf for Oracle module
+#
+# This was originally created with autoscan
+#
+# $Id: configure.in,v 1.5 2008/01/30 19:31:05 sds Exp $
+#
+
+# Process this file with autoconf to produce a configure script.
+AC_INIT(oracle-clisp, 0.1, hin@alma.com)
+AC_CONFIG_SRCDIR(oracle.lisp)
+AC_CONFIG_HEADERS(config.h)
+
+RSE_BOLD
+BOLD_MSG([Oracle (Common)])
+if test $cl_cv_have_ffcall = no; then
+  AC_MSG_ERROR([module Oracle requires FFI])
+fi
+CL_MODULE_COMMON_CHECKS
+
+BOLD_MSG([Oracle (Programs)])
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+
+BOLD_MSG([Oracle (Headers)])
+AC_CHECK_HEADERS([stdlib.h string.h])
+
+BOLD_MSG([Oracle (Functions)])
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([strdup])
+
+BOLD_MSG([Oracle (Output)])
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
+BOLD_MSG([Oracle (Done)])
