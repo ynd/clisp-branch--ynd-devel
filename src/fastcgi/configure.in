@@ -1,0 +1,30 @@
+# configure.ac for FastCGI module
+
+AC_INIT(clisp-fastcgi-interface, 0.1, hin@alma.com)
+AC_CONFIG_SRCDIR(fastcgi.lisp)
+AC_CONFIG_HEADERS(config.h)
+
+RSE_BOLD
+BOLD_MSG([FastCGI (Common)])
+if test $cl_cv_have_ffcall = no; then
+  AC_MSG_ERROR([module FastCGI requires FFI])
+fi
+CL_MODULE_COMMON_CHECKS
+
+BOLD_MSG([FastCGI (Programs)])
+AC_PROG_LN_S
+AC_PROG_MAKE_SET
+
+BOLD_MSG([FastCGI (Headers)])
+AC_CHECK_HEADERS([string.h unistd.h])
+
+BOLD_MSG([FastCGI (Types)])
+AC_TYPE_SIZE_T
+
+BOLD_MSG([FastCGI (Functions)])
+AC_CHECK_FUNCS([strchr])
+
+BOLD_MSG([FastCGI (Output)])
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT
+BOLD_MSG([FastCGI (Done)])
