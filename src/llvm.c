@@ -8,7 +8,6 @@
 /* ------ CLISP GC harness ------ */
 struct jitc_object {
   int jo_gc_mark;
-  LLVMModuleRef module;
   struct jitc_object* jo_next;
 };
 /* all JITC objects as a linked list */
@@ -28,22 +27,73 @@ void gc_scan_jitc_objects (void) {
       next = &((*next)->jo_next);
     } else {                      /* release */
       struct jitc_object *jo_next = (*next)->jo_next;
-      LLVMDisposeModule((*next)->module);
       free(*next);
       *next = jo_next;
     }
   }
 }
 
-/* ------ JITC Functions ------ */
-LLVMValueRef JITC_VALUES = NULL;
-LLVMValueRef JITC_STACK = NULL;
+/* ------ JITC Globals and init functions ------ */
+#define JITC_OBJECT_TYPE LLVMPointerType(LLVMInt32Type(), 0)
+LLVMModuleRef JITC_GLOBAL_MODULE = NULL;
+LLVMExecutionEngineRef JITC_ENGINE = NULL;
+LLVMBuilderRef JITC_BUILDER = NULL;
 
-void jitc_set_values(LLVMBuilderRef b, LLVMValueRef n, LLVMValueRef val){
+LLVMValueRef JITC_VALUES = NULL;
+LLVMValueRef JITC_VALUES_COUNT = NULL;
+LLVMValueRef JITC_STACK = NULL;
+LLVMValueRef JITC_NIL = NULL;
+
+// TODO: Declare as many globals as possible as constant
+void jitc_init_compiler () {
+  char* error = NULL;
   
+  JITC_GLOBAL_MODULE = LLVMModuleCreateWithName("Global Module");
+  if(LLVMCreateJITCompiler(&JITC_ENGINE,
+      LLVMCreateModuleProviderForExistingModule(JITC_GLOBAL_MODULE),
+      &error)) {
+    fprintf(stderr, "%s\n", error);
+    LLVMDisposeMessage(error);
+    abort();
+  }
+  JITC_BUILDER = LLVMCreateBuilder();
+  JITC_VALUES_COUNT = LLVMAddGlobal(JITC_GLOBAL_MODULE,
+    LLVMInt32Type(), "VALUES_COUNT");
+  LLVMAddGlobalMapping(JITC_ENGINE, JITC_VALUES_COUNT, &mv_count);
+  JITC_VALUES = LLVMAddGlobal(JITC_GLOBAL_MODULE,
+    LLVMArrayType(JITC_OBJECT_TYPE, mv_limit-1), "VALUES");
+  LLVMAddGlobalMapping(JITC_ENGINE, JITC_VALUES, &mv_space);
+  JITC_STACK = LLVMAddGlobal(JITC_GLOBAL_MODULE,
+    LLVMPointerType(JITC_OBJECT_TYPE, 0), "STACK");
+  LLVMAddGlobalMapping(JITC_ENGINE, JITC_STACK, &STACK);
+  JITC_NIL = LLVMAddGlobal(JITC_GLOBAL_MODULE, LLVMInt32Type(), "NIL");
+  LLVMAddGlobalMapping(JITC_ENGINE, JITC_NIL, NIL);
+  LLVMSetGlobalConstant(JITC_NIL, 1);
+  // LLVMDumpModule(JITC_GLOBAL_MODULE);
+  // abort();
 }
 
+/* ------ JITC Common Operations ------ */
+#define jitc_begin() {\
+    LLVMValueRef fun = LLVMAddFunction(JITC_GLOBAL_MODULE, "fun", \
+      LLVMFunctionType(LLVMVoidType(), NULL, 0, 0));
+#define jitc_end()\
+    LLVMBuildRetVoid(JITC_BUILDER);\
+    LLVMRunFunction(JITC_ENGINE, fun, 0, NULL);\
+    LLVMDeleteFunction(fun);\
+  }
 
+void jitc_set_values_1 (LLVMValueRef val) {
+  LLVMBuildStore(JITC_BUILDER, LLVMConstInt(LLVMInt32Type(), 1, 0),
+                  JITC_VALUES_COUNT);
+  LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
+                        LLVMConstInt(LLVMInt32Type(), 0, 0)};
+  LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, JITC_VALUES, 
+                          idx, 2, "value1");
+  LLVMBuildStore(JITC_BUILDER, val, ptr);
+}
+
+/* ------ JITC Main functions ------ */
 /* Compile a bytecode function into machine code */
 static Values jitc_compile (object closure_in, Sbvector codeptr,
                         const uintB* byteptr_in) {
@@ -73,23 +123,17 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
   var DYNAMIC_ARRAY(private_SP_space,SPint,private_SP_length);
   SPint* private_SP = &private_SP_space[private_SP_length];
   
-  if (!TheFpointer(cclosure_jitc(closure_in))->fp_pointer) {
-    struct jitc_object *jo = malloc(sizeof(struct jitc_object));
-    jo->jo_gc_mark = 0;
-    jo->module = LLVMModuleCreateWithName("");
-    jo->jo_next = all_jitc_objects;
-    all_jitc_objects = jo;
-    TheFpointer(cclosure_jitc(closure_in))->fp_pointer = jo;
-  }
-  struct jitc_object *jo = TheFpointer(cclosure_jitc(closure_in))->fp_pointer;
-  // if (!JITC_VALUES || !JITC_STACK) {
-  //   JITC_VALUES = LLVMAddGlobal(jo->module,
-  //     LLVMPointerType(LLVMVoidType(), mv_limit-1), "VALUES");
-  //   // LLVMSetInitializer(jo->module, LLVMConstInt());
-  //   JITC_STACK = LLVMAddGlobal(jo->module,
-  //     LLVMPointerType(LLVMVoidType(), abs(STACK_bound-STACK_start)), "STACK");
-  //   // LLVMSetInitializer();
+  // if (!TheFpointer(cclosure_jitc(closure_in))->fp_pointer) {
+  //   struct jitc_object *jo = malloc(sizeof(struct jitc_object));
+  //   jo->jo_gc_mark = 0;
+  //   jo->module = LLVMModuleCreateWithName("");
+  //   jo->jo_next = all_jitc_objects;
+  //   all_jitc_objects = jo;
+  //   TheFpointer(cclosure_jitc(closure_in))->fp_pointer = jo;
   // }
+  // struct jitc_object *jo = TheFpointer(cclosure_jitc(closure_in))->fp_pointer;
+  if (!JITC_GLOBAL_MODULE)
+    jitc_init_compiler();
   
   #undef SP_
   #undef _SP_
@@ -234,7 +278,12 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
 
     /* ------------------- (1) Constants ----------------------- */
     CASE cod_nil: code_nil: {   /* (NIL) */
-      VALUES1(NIL);
+      jitc_begin();
+      // VALUES1(NIL);
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(NIL)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      jitc_set_values_1(JITC_NIL);
+      jitc_end();
     } goto next_byte;
     CASE cod_nil_push: {        /* (NIL&PUSH) */
       pushSTACK(NIL);
@@ -1934,13 +1983,13 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
 /* ensure that the function has been jit-compiled and run it */
 static Values jitc_run (object closure_in, Sbvector codeptr,
                         const uintB* byteptr_in) {
-                          struct jitc_object *jo;
-  if (!fpointerp(cclosure_jitc(closure_in))) {
-    pushSTACK(closure_in);
-    object fp = allocate_fpointer(NULL);
-    closure_in = popSTACK();
-    
-    cclosure_jitc(closure_in) = fp;
-  }
+  struct jitc_object *jo;
+  // if (!fpointerp(cclosure_jitc(closure_in))) {
+  //   pushSTACK(closure_in);
+  //   object fp = allocate_fpointer(NULL);
+  //   closure_in = popSTACK();
+  //   
+  //   cclosure_jitc(closure_in) = fp;
+  // }
   jitc_compile(closure_in,codeptr,byteptr_in);
 }

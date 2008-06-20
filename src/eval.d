@@ -8267,6 +8267,8 @@ global maygc void init_cclosures (void) {
 #if defined(USE_JITC)
  #if defined(lightning)
   #include "lightning.c"
+ #elif defined(llvm)
+  #include "llvm.c"
  #else
   #error USE_JITC: what is your JITC flavor?
  #endif
