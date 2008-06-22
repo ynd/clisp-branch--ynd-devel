@@ -35,28 +35,46 @@ void gc_scan_jitc_objects (void) {
 
 /* ------ JITC Globals and init functions ------ */
 #define JITC_OBJECT_TYPE LLVMPointerType(LLVMInt32Type(), 0)
+#ifdef STACK_DOWN
+  #define JITC_STACK_NEXT  -1
+#else
+  #define JITC_STACK_NEXT  1
+#endif
+
 LLVMModuleRef JITC_GLOBAL_MODULE = NULL;
 LLVMExecutionEngineRef JITC_ENGINE = NULL;
 LLVMBuilderRef JITC_BUILDER = NULL;
+LLVMPassManagerRef JITC_PASS_MANAGER = NULL;
 
 LLVMValueRef JITC_VALUES = NULL;
 LLVMValueRef JITC_VALUES_COUNT = NULL;
 LLVMValueRef JITC_STACK = NULL;
 LLVMValueRef JITC_NIL = NULL;
+LLVMValueRef JITC_PRINTF = NULL;
+
 
 // TODO: Declare as many globals as possible as constant
 void jitc_init_compiler () {
   char* error = NULL;
   
   JITC_GLOBAL_MODULE = LLVMModuleCreateWithName("Global Module");
-  if(LLVMCreateJITCompiler(&JITC_ENGINE,
-      LLVMCreateModuleProviderForExistingModule(JITC_GLOBAL_MODULE),
-      &error)) {
+  LLVMModuleProviderRef MP =
+    LLVMCreateModuleProviderForExistingModule(JITC_GLOBAL_MODULE);
+  if(LLVMCreateJITCompiler(&JITC_ENGINE, MP, &error)) {
     fprintf(stderr, "%s\n", error);
     LLVMDisposeMessage(error);
     abort();
   }
   JITC_BUILDER = LLVMCreateBuilder();
+  JITC_PASS_MANAGER = LLVMCreateFunctionPassManager(MP);
+  LLVMAddTargetData(LLVMGetExecutionEngineTargetData(JITC_ENGINE),
+                    JITC_PASS_MANAGER);
+  LLVMAddConstantPropagationPass(JITC_PASS_MANAGER);
+  LLVMAddInstructionCombiningPass(JITC_PASS_MANAGER);
+  LLVMAddPromoteMemoryToRegisterPass(JITC_PASS_MANAGER);
+  LLVMAddGVNPass(JITC_PASS_MANAGER);
+  LLVMAddCFGSimplificationPass(JITC_PASS_MANAGER);
+  
   JITC_VALUES_COUNT = LLVMAddGlobal(JITC_GLOBAL_MODULE,
     LLVMInt32Type(), "VALUES_COUNT");
   LLVMAddGlobalMapping(JITC_ENGINE, JITC_VALUES_COUNT, &mv_count);
@@ -69,6 +87,11 @@ void jitc_init_compiler () {
   JITC_NIL = LLVMAddGlobal(JITC_GLOBAL_MODULE, LLVMInt32Type(), "NIL");
   LLVMAddGlobalMapping(JITC_ENGINE, JITC_NIL, NIL);
   LLVMSetGlobalConstant(JITC_NIL, 1);
+  LLVMTypeRef printf_args[] = {LLVMPointerType(LLVMInt8Type(), 0)};
+  JITC_PRINTF = LLVMAddFunction(JITC_GLOBAL_MODULE, "printf",
+                                LLVMFunctionType(LLVMInt32Type(),
+                                                  printf_args, 1, 1));
+  LLVMAddGlobalMapping(JITC_ENGINE, JITC_PRINTF, printf);
   // LLVMDumpModule(JITC_GLOBAL_MODULE);
   // abort();
 }
@@ -80,17 +103,59 @@ void jitc_init_compiler () {
 #define jitc_end()\
     LLVMBuildRetVoid(JITC_BUILDER);\
     LLVMRunFunction(JITC_ENGINE, fun, 0, NULL);\
+    LLVMFreeMachineCodeForFunction(JITC_ENGINE, fun);\
     LLVMDeleteFunction(fun);\
   }
+
+void jitc_optimize (LLVMValueRef fun) {
+  LLVMRunFunctionPassManager(JITC_PASS_MANAGER, fun);
+}
+
+void jitc_print_value (const char *mes, LLVMValueRef val) {
+  LLVMValueRef str = LLVMAddGlobal(JITC_GLOBAL_MODULE,
+                                    LLVMArrayType(LLVMInt8Type(), strlen(mes)),
+                                    "");
+  LLVMSetInitializer(str, LLVMConstString(mes, strlen(mes), 0));
+  LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
+                        LLVMConstInt(LLVMInt32Type(), 0, 0)};
+  LLVMValueRef strptr = LLVMBuildGEP(JITC_BUILDER, str, idx, 2, "strptr");
+  LLVMValueRef printf_args[] = { strptr, val };
+  LLVMBuildCall(JITC_BUILDER, JITC_PRINTF, printf_args, 2, "");
+}
 
 void jitc_set_values_1 (LLVMValueRef val) {
   LLVMBuildStore(JITC_BUILDER, LLVMConstInt(LLVMInt32Type(), 1, 0),
                   JITC_VALUES_COUNT);
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
                         LLVMConstInt(LLVMInt32Type(), 0, 0)};
-  LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, JITC_VALUES, 
-                          idx, 2, "value1");
-  LLVMBuildStore(JITC_BUILDER, val, ptr);
+  LLVMBuildStore(JITC_BUILDER, val, LLVMConstGEP(JITC_VALUES, idx, 2));
+}
+
+LLVMValueRef jitc_getptr_stack (int n) {
+  LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
+  #ifdef STACK_DOWN
+    LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
+  #else
+    LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), -1 - n, 1)};
+  #endif
+  return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
+}
+
+LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
+  #ifdef STACK_DOWN
+    LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
+  #else
+    LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), -1 - n, 1)};
+  #endif
+  return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
+}
+
+void jitc_push_stack (LLVMValueRef val) {
+  LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
+  LLVMBuildStore(JITC_BUILDER, val, jitc_getptr_stack_with(-1, top));
+  LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), JITC_STACK_NEXT, 1)};
+  LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "NEW_TOP");
+  LLVMBuildStore(JITC_BUILDER, ptr, JITC_STACK);
 }
 
 /* ------ JITC Main functions ------ */
@@ -278,15 +343,20 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
 
     /* ------------------- (1) Constants ----------------------- */
     CASE cod_nil: code_nil: {   /* (NIL) */
-      jitc_begin();
       // VALUES1(NIL);
+      jitc_begin();
       LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(NIL)");
       LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
       jitc_set_values_1(JITC_NIL);
       jitc_end();
     } goto next_byte;
     CASE cod_nil_push: {        /* (NIL&PUSH) */
-      pushSTACK(NIL);
+      // pushSTACK(NIL);
+      jitc_begin();
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(NIL&PUSH)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      jitc_push_stack(JITC_NIL);
+      jitc_end();
     } goto next_byte;
     CASE cod_push_nil: {        /* (PUSH-NIL n) */
       var uintC n;
