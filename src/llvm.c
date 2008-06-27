@@ -101,13 +101,14 @@ void jitc_init_compiler () {
 }
 
 /* ------ JITC Common Operations ------ */
-/* Get the offset of a field in a struct*/
+/* Get the offset of a field in a struct */
 #define jitc_get_offset(struc_p, f) ( ((long) (&((struc_p) 8)->f) ) - 8)
 
 #define jitc_begin() {\
     LLVMValueRef fun = LLVMAddFunction(JITC_GLOBAL_MODULE, "fun", \
       LLVMFunctionType(LLVMVoidType(), NULL, 0, 0));\
-    LLVMValueRef jitc_closure =   LLVMConstIntToPtr(LLVMConstInt(LLVMInt64Type(), (int)closure, 1),  JITC_OBJECT_TYPE);
+    LLVMValueRef jitc_closure = LLVMConstIntToPtr(LLVMConstInt(LLVMInt64Type(), (int)&closure, 1), LLVMPointerType(JITC_OBJECT_TYPE, 0));\
+    LLVMValueRef jitc_sp = LLVMConstIntToPtr(LLVMConstInt(LLVMInt64Type(), (int)&private_SP, 1), LLVMPointerType(LLVMPointerType(JITC_OBJECT_TYPE, 0), 0));
 #define jitc_end()\
     LLVMBuildRetVoid(JITC_BUILDER);\
     LLVMRunFunction(JITC_ENGINE, fun, 0, NULL);\
@@ -163,9 +164,17 @@ LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
   #endif
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
+#define jitc_getptr_frame jitc_getptr_stack_with
 
 void jitc_push_stack (LLVMValueRef val) {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
+  LLVMBuildStore(JITC_BUILDER, val, jitc_getptr_stack_with(-1, top));
+  LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), JITC_STACK_NEXT, 1)};
+  LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "NEW_TOP");
+  LLVMBuildStore(JITC_BUILDER, ptr, JITC_STACK);
+}
+
+void jitc_push_stack_with (LLVMValueRef val, LLVMValueRef top) {
   LLVMBuildStore(JITC_BUILDER, val, jitc_getptr_stack_with(-1, top));
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), JITC_STACK_NEXT, 1)};
   LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "NEW_TOP");
@@ -197,13 +206,20 @@ void jitc_repeat (int n, LLVMBasicBlockRef repeat, LLVMBasicBlockRef prev,
 LLVMValueRef jitc_getptr_cconst (LLVMValueRef closureptr, int n) {
   void* offset = TheCclosure(as_object(jitc_get_offset(Cclosure, clos_consts)));
   LLVMValueRef pos = LLVMConstInt(LLVMInt64Type(), (int)offset, 1);
-  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, closureptr,
-                                              LLVMInt64Type(), "");
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER,
+                                    LLVMBuildLoad(JITC_BUILDER, closureptr, ""),
+                                    LLVMInt64Type(), "");
   LLVMValueRef cconsts = LLVMBuildAdd(JITC_BUILDER, converted, pos, "");
   LLVMValueRef res = LLVMBuildIntToPtr(JITC_BUILDER, cconsts,
-                                        LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+                                      LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
   return LLVMBuildGEP(JITC_BUILDER, res, idx, 1, "");
+}
+
+LLVMValueRef jitc_getptr_sp (int n, LLVMValueRef topptr) {
+  LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, topptr, "");
+  LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
+  return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
 
 /* ------ JITC Main functions ------ */
@@ -462,12 +478,25 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
     CASE cod_load: {            /* (LOAD n) */
       var uintL n;
       U_operand(n);
-      VALUES1(STACK_(n));
+      // VALUES1(STACK_(n));
+      jitc_begin();
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(LOAD n)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      LLVMValueRef res = jitc_getptr_stack(n);
+      jitc_set_values_1(LLVMBuildLoad(JITC_BUILDER, res, ""));
+      jitc_end();
     } goto next_byte;
     CASE cod_load_push: {       /* (LOAD&PUSH n) */
       var uintL n;
       U_operand(n);
-      pushSTACK(STACK_(n));
+      // pushSTACK(STACK_(n));
+      jitc_begin();
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(LOAD&PUSH n)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
+      LLVMValueRef res = jitc_getptr_stack_with(n, top);
+      jitc_push_stack_with(LLVMBuildLoad(JITC_BUILDER, res, ""), top);
+      jitc_end();
     } goto next_byte;
     CASE cod_loadi: {           /* (LOADI k1 k2 n) */
       var uintL k1;
@@ -476,8 +505,20 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       U_operand(k1);
       U_operand(k2);
       U_operand(n);
-      var gcv_object_t* FRAME = (gcv_object_t*) SP_(k1+jmpbufsize*k2);
-      VALUES1(FRAME_(n));
+      // var gcv_object_t* FRAME = (gcv_object_t*) SP_(k1+jmpbufsize*k2);
+      // VALUES1(FRAME_(n));
+      jitc_begin();
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(LOADI k1 k2 n)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      LLVMValueRef res = LLVMBuildLoad(JITC_BUILDER,
+                                      jitc_getptr_sp(k1+jmpbufsize*k2, jitc_sp),
+                                      "");
+      LLVMValueRef conv = LLVMBuildBitCast(JITC_BUILDER, res,
+                                      LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+      LLVMValueRef obj = LLVMBuildLoad(JITC_BUILDER,
+                                        jitc_getptr_frame(n, conv), NULL);
+      jitc_set_values_1(obj);
+      jitc_end();
     } goto next_byte;
     CASE cod_loadi_push: {      /* (LOADI&PUSH k1 k2 n) */
       var uintL k1;
@@ -486,8 +527,20 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       U_operand(k1);
       U_operand(k2);
       U_operand(n);
-      var gcv_object_t* FRAME = (gcv_object_t*) SP_(k1+jmpbufsize*k2);
-      pushSTACK(FRAME_(n));
+      // var gcv_object_t* FRAME = (gcv_object_t*) SP_(k1+jmpbufsize*k2);
+      // pushSTACK(FRAME_(n));
+      jitc_begin();
+      LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(LOADI k1 k2 n)");
+      LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      LLVMValueRef res = LLVMBuildLoad(JITC_BUILDER,
+                                      jitc_getptr_sp(k1+jmpbufsize*k2, jitc_sp),
+                                      "");
+      LLVMValueRef conv = LLVMBuildBitCast(JITC_BUILDER, res,
+                                      LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+      LLVMValueRef obj = LLVMBuildLoad(JITC_BUILDER,
+                                        jitc_getptr_frame(n, conv), NULL);
+      jitc_push_stack(obj);
+      jitc_end();
     } goto next_byte;
     CASE cod_loadc: {           /* (LOADC n m) */
       var uintL n;
