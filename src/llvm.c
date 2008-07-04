@@ -290,7 +290,7 @@ LLVMValueRef jitc_getptr_venv (LLVMValueRef closure) {
   return jitc_getptr_cconst(closure, 0);
 }
 
-LLVMValueRef jitc_isbound_sym (LLVMValueRef sym) {
+LLVMValueRef jitc_isbound (LLVMValueRef sym) {
   LLVMValueRef If = LLVMBuildICmp(JITC_BUILDER, LLVMIntNE, sym, JITC_UNBOUND, "is_unbound");
   return If;
 }
@@ -897,7 +897,8 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       // LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
       // LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_closure, "");
       // sym = LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(sym, n), "");
-      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_isbound_sym(sym), "");
+      // LLVMValueRef val = jitc_get_symvalue(sym);
+      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_isbound(val), "");
       // LLVMBuildCondBr(JITC_BUILDER, If, iferror, end);
       // 
       // LLVMPositionBuilderAtEnd(JITC_BUILDER, iferror);
@@ -906,7 +907,7 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       // jitc_error(unbound_variable, GETTEXT("~S: symbol ~S has no value"));
       // 
       // LLVMPositionBuilderAtEnd(JITC_BUILDER, end);
-      // jitc_set_values_1(jitc_get_symvalue(sym));
+      // jitc_set_values_1(val);
       // 
       // jitc_end();
     } goto next_byte;
@@ -921,6 +922,27 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
         error(unbound_variable,GETTEXT("~S: symbol ~S has no value"));
       }
       pushSTACK(Symbol_value(symbol));
+      // jitc_begin();
+      // LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(GETVALUE&PUSH n)");
+      // LLVMBasicBlockRef iferror = LLVMAppendBasicBlock(fun, "");
+      // LLVMBasicBlockRef end = LLVMAppendBasicBlock(fun, "");
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      // LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_closure, "");
+      // sym = LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(sym, n), "");
+      // LLVMValueRef val = jitc_get_symvalue(sym);
+      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_isbound(val), "");
+      // LLVMBuildCondBr(JITC_BUILDER, If, iferror, end);
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, iferror);
+      // jitc_push_stack(sym);
+      // jitc_push_stack(sym);
+      // jitc_error(unbound_variable, GETTEXT("~S: symbol ~S has no value"));
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, end);
+      // jitc_push_stack(val);
+      // 
+      // jitc_end();
     } goto next_byte;
     CASE cod_setvalue: {        /* (SETVALUE n) */
       var uintL n;
