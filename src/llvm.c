@@ -171,6 +171,10 @@ LLVMValueRef jitc_getptr_values (int n) {
   return LLVMConstGEP(JITC_VALUES, idx, 2);
 }
 
+LLVMValueRef jitc_get_values (int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_values(n), "");
+}
+
 void jitc_set_mvcount (int n) {
   LLVMBuildStore(JITC_BUILDER, LLVMConstInt(LLVMInt32Type(), n, 0), JITC_VALUES_COUNT);
 }
@@ -192,6 +196,10 @@ LLVMValueRef jitc_getptr_stack (int n) {
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
 
+LLVMValueRef jitc_get_stack (int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_stack(n), "");
+}
+
 LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
   #ifdef STACK_DOWN
     LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
@@ -199,6 +207,10 @@ LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
     LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), -1 - n, 1)};
   #endif
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
+}
+
+LLVMValueRef jitc_get_stack_with (int n, LLVMValueRef top) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_stack_with(n, top), "");
 }
 
 LLVMValueRef jitc_getptr_frame (LLVMValueRef top, int n) {
@@ -210,6 +222,10 @@ LLVMValueRef jitc_getptr_frame (LLVMValueRef top, int n) {
   LLVMValueRef conv = LLVMBuildBitCast(JITC_BUILDER, top,
                         LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
   return LLVMBuildGEP(JITC_BUILDER, conv, idx, 1, "");
+}
+
+LLVMValueRef jitc_get_frame (LLVMValueRef top, int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_frame(top, n), "");
 }
 
 LLVMValueRef jitc_pop_stack () {
@@ -257,9 +273,7 @@ void jitc_repeat (int n, LLVMBasicBlockRef repeat, LLVMBasicBlockRef prev, LLVMB
 }
 
 LLVMValueRef jitc_getptr_cconst (LLVMValueRef closure, int n) {
-  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER,
-                                    closure,
-                                    LLVMInt64Type(), "");
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, closure, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Cclosure, clos_consts);
   LLVMValueRef cconsts = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
   LLVMValueRef res = LLVMBuildIntToPtr(JITC_BUILDER, cconsts,
@@ -268,10 +282,27 @@ LLVMValueRef jitc_getptr_cconst (LLVMValueRef closure, int n) {
   return LLVMBuildGEP(JITC_BUILDER, res, idx, 1, "");
 }
 
+LLVMValueRef jitc_get_cconst (LLVMValueRef closure, int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(closure, n), "");
+}
+
+LLVMValueRef jitc_getptr_clos_name_or_class_version (LLVMValueRef clos) {
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, clos, LLVMInt64Type(), "");
+  LLVMValueRef offset = jitc_get_offset(Cclosure, clos_name_or_class_version);
+  LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
+  LLVMValueRef res = LLVMBuildIntToPtr(JITC_BUILDER, data,
+                                      LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  return res;
+}
+
 LLVMValueRef jitc_getptr_sp (LLVMValueRef topptr, int n) {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, topptr, "");
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
+}
+
+LLVMValueRef jitc_get_sp (LLVMValueRef topptr, int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_sp(topptr, n), "");
 }
 
 LLVMValueRef jitc_getptr_svecdata (LLVMValueRef svec, int n) {
@@ -286,24 +317,96 @@ LLVMValueRef jitc_getptr_svecdata (LLVMValueRef svec, int n) {
   return LLVMBuildGEP(JITC_BUILDER, res, idx, 1, "");
 }
 
+LLVMValueRef jitc_get_svecdata (LLVMValueRef svec, int n) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_svecdata(svec, n), "");
+}
+
 LLVMValueRef jitc_getptr_venv (LLVMValueRef closure) {
   return jitc_getptr_cconst(closure, 0);
 }
 
-LLVMValueRef jitc_isbound (LLVMValueRef sym) {
+LLVMValueRef jitc_is_symbound (LLVMValueRef sym) {
   LLVMValueRef If = LLVMBuildICmp(JITC_BUILDER, LLVMIntNE, sym, JITC_UNBOUND, "is_unbound");
   return If;
 }
 
-LLVMValueRef jitc_get_symvalue (LLVMValueRef sym) {
-  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER,
-                                    sym,
-                                    LLVMInt64Type(), "");
+LLVMValueRef jitc_getptr_symvalue (LLVMValueRef sym) {
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, sym, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Symbol, symvalue);
   LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
   LLVMValueRef res = LLVMBuildIntToPtr(JITC_BUILDER, data,
                                       LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  return res;
+}
+
+LLVMValueRef jitc_get_symvalue (LLVMValueRef sym) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_symvalue(sym), "");
+}
+
+LLVMValueRef jitc_getptr_symflags (LLVMValueRef sym) {
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, sym, LLVMInt64Type(), "");
+  LLVMValueRef offset = jitc_get_offset(Symbol, header_flags);
+  LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
+  LLVMValueRef res = LLVMBuildIntToPtr(JITC_BUILDER, data,
+                                      LLVMPointerType(LLVMInt32Type(), 0), "");
+  return res;
+}
+
+LLVMValueRef jitc_get_symflags (LLVMValueRef sym) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_symflags(sym), "");
+}
+
+LLVMValueRef jitc_is_symconst (LLVMValueRef sym) {
+  LLVMValueRef mask = LLVMConstInt(LLVMInt32Type(), bit(var_bit0_hf)|bit(var_bit1_hf), 1);
+  LLVMValueRef flags = LLVMBuildNot(JITC_BUILDER, jitc_get_symflags(sym), "");
+  LLVMValueRef res = LLVMBuildAnd(JITC_BUILDER, mask, flags, "");
+  return LLVMBuildICmp(JITC_BUILDER, LLVMIntEQ, res, LLVMConstInt(LLVMInt32Type(), 0, 1), "");
+}
+
+LLVMValueRef jitc_isclosure (LLVMValueRef obj) {
+  LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, obj, LLVMInt64Type(), "");
+  LLVMValueRef offset = jitc_get_offset(Cclosure, tfl);
+  LLVMValueRef tmp = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
+  tmp = LLVMBuildLShr(JITC_BUILDER, tmp, LLVMConstInt(LLVMInt64Type(), 8, 0), "");
+  tmp = LLVMBuildAnd(JITC_BUILDER, tmp, LLVMConstInt(LLVMInt64Type(), 0xFF, 0), "");
+  tmp = LLVMBuildAnd(JITC_BUILDER, tmp, LLVMConstInt(LLVMInt64Type(), closflags_instance_B, 0), "");
+  tmp = LLVMBuildICmp(JITC_BUILDER, LLVMIntNE, tmp, LLVMConstInt(LLVMInt64Type(), 0, 1), "");
+  tmp = LLVMBuildZExt(JITC_BUILDER, tmp, LLVMInt32Type(), "");
+  return tmp;
+}
+
+LLVMValueRef jitc_getptr_closname (LLVMValueRef clos) {
+  LLVMBasicBlockRef prev = LLVMGetInsertBlock(JITC_BUILDER);
+  LLVMBasicBlockRef bb_false = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "");
+  LLVMBasicBlockRef bb_true = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "");
+  LLVMBasicBlockRef bb_res = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "");
+  
+  LLVMValueRef res = LLVMBuildAlloca(JITC_BUILDER, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  
+  LLVMValueRef If = LLVMBuildICmp(JITC_BUILDER, LLVMIntEQ, jitc_isclosure(clos),
+                        LLVMConstInt(LLVMInt32Type(), 1, 1), "");
+  LLVMBuildCondBr(JITC_BUILDER, If, bb_true, bb_false);
+  
+  LLVMPositionBuilderAtEnd(JITC_BUILDER, bb_true);
+  LLVMBuildStore(JITC_BUILDER, jitc_getptr_cconst(clos, 1), res);
+  LLVMBuildBr(JITC_BUILDER, bb_res);
+  
+  LLVMPositionBuilderAtEnd(JITC_BUILDER, bb_false);
+  LLVMBuildStore(JITC_BUILDER, jitc_getptr_clos_name_or_class_version(clos), res);
+  LLVMBuildBr(JITC_BUILDER, bb_res);
+  
+  LLVMPositionBuilderAtEnd(JITC_BUILDER, bb_res);
   return LLVMBuildLoad(JITC_BUILDER, res, "");
+}
+
+LLVMValueRef jitc_get_closname (LLVMValueRef clos) {
+  return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_closname(clos), "");
+}
+
+void jitc_finish_frame (int type, int size) {
+  int w = makebottomword(type, size*sizeof(gcv_object_t));
+  LLVMValueRef word = LLVMConstInt(LLVMInt64Type(), w, 0);
+  jitc_push_stack(LLVMConstIntToPtr(word, JITC_OBJECT_TYPE));
 }
 
 /* ------ JITC Main functions ------ */
@@ -898,7 +1001,7 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       // LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_closure, "");
       // sym = LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(sym, n), "");
       // LLVMValueRef val = jitc_get_symvalue(sym);
-      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_isbound(val), "");
+      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_is_symbound(val), "");
       // LLVMBuildCondBr(JITC_BUILDER, If, iferror, end);
       // 
       // LLVMPositionBuilderAtEnd(JITC_BUILDER, iferror);
@@ -931,7 +1034,7 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       // LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_closure, "");
       // sym = LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(sym, n), "");
       // LLVMValueRef val = jitc_get_symvalue(sym);
-      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_isbound(val), "");
+      // LLVMValueRef If = LLVMBuildNot(JITC_BUILDER, jitc_is_symbound(val), "");
       // LLVMBuildCondBr(JITC_BUILDER, If, iferror, end);
       // 
       // LLVMPositionBuilderAtEnd(JITC_BUILDER, iferror);
@@ -954,11 +1057,41 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
         error(error_condition,GETTEXT("~S: assignment to constant symbol ~S is impossible"));
       }
       Symbol_value(symbol) = value1; mv_count=1;
+      // jitc_begin();
+      // LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(SETVALUE n)");
+      // LLVMBasicBlockRef iferror = LLVMAppendBasicBlock(fun, "");
+      // LLVMBasicBlockRef end = LLVMAppendBasicBlock(fun, "");
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      // LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_closure, "");
+      // sym = jitc_get_cconst(sym, n);
+      // LLVMBuildCondBr(JITC_BUILDER, jitc_is_symconst(sym), iferror, end);
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, iferror);
+      // jitc_push_stack(sym);
+      // jitc_push_stack(jitc_get_closname(sym));
+      // jitc_error(error_condition, GETTEXT("~S: assignment to constant symbol ~S is impossible"));
+      // 
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, end);
+      // LLVMBuildStore(JITC_BUILDER, jitc_get_values(0), jitc_getptr_symvalue(sym));
+      // jitc_set_mvcount(1);
+      // 
+      // jitc_end();
     } goto next_byte;
     CASE cod_bind: {            /* (BIND n) */
       var uintL n;
       U_operand(n);
       dynamic_bind(TheCclosure(closure)->clos_consts[n],value1);
+      // jitc_begin();
+      // LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(BIND n)");
+      // LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+      // LLVMValueRef sym = jitc_get_cconst(LLVMBuildLoad(JITC_BUILDER, jitc_closure, ""), n);
+      // LLVMValueRef top = jitc_getptr_stack(0);
+      // jitc_push_stack(jitc_get_symvalue(sym));
+      // jitc_push_stack(sym);
+      // jitc_finish_frame(DYNBIND_frame_info, 3);
+      // LLVMBuildStore(JITC_BUILDER, jitc_get_values(0), jitc_getptr_symvalue(sym));
+      // jitc_end();
     } goto next_byte;
     CASE cod_unbind1:           /* (UNBIND1) */
       #if STACKCHECKC

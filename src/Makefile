@@ -1,6 +1,6 @@
 # -*- Makefile -*- for the CLISP binaries
 # DO NOT EDIT! GENERATED AUTOMATICALLY!
-# This file was created on host yann-dauphins-computer.local as the output of the command:
+# This file was created on host Macintosh.local as the output of the command:
 # ./makemake --with-jitc=llvm
 
 # -------------- Start of configurable section --------------------
@@ -57,11 +57,11 @@ MODULE_CONFIGURE_FLAGS = --with-jitc=llvm
 CC = gcc
 LD = g++
 CPPFLAGS =  -Igllib
-CFLAGS = -g -O2 -W -Wswitch -Wcomment -Wpointer-arith -Wimplicit -Wreturn-type -Wmissing-declarations -Wno-sign-compare -O2 -fexpensive-optimizations -falign-functions=4 -DUNIX_BINARY_DISTRIB -DUNICODE -DHEAPCODES -DUSE_JITC -Dllvm -DNO_GETTEXT -DNO_SIGSEGV -I.
+CFLAGS = -arch i386 -W -Wswitch -Wcomment -Wpointer-arith -Wimplicit -Wreturn-type -Wmissing-declarations -Wno-sign-compare -O2 -fexpensive-optimizations -falign-functions=4 -DUNIX_BINARY_DISTRIB -DUNICODE -DHEAPCODES -DUSE_JITC -Dllvm -DNO_GETTEXT -DNO_SIGSEGV -I.
 CPP = gcc -E
 CLFLAGS =   -x none
 LIBS = -lncurses  -liconv `llvm-config --libs --cflags --ldflags core analysis executionengine jit interpreter native`
-X_LIBS =  -L/usr/X11R6/lib
+X_LIBS =  -L/usr/X11/lib -R/usr/X11/lib
 
 RM = rm -f
 RMRF = rm -rf
@@ -1084,10 +1084,10 @@ eval.i : eval.c lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix
 	$(CPP) $(CPPFLAGS) $(CFLAGS) eval.c > eval.i
 
 eval.s : eval.c lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c bytecode.c llvm.c gllib/stdint.h localcharset.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) -Wno-unused -S eval.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -S eval.c
 
 eval.o : eval.c lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c bytecode.c llvm.c gllib/stdint.h localcharset.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) `llvm-config --cflags` -Wno-unused -c eval.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) `llvm-config --cflags` -c eval.c
 
 control.i : control.c lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c gllib/stdint.h localcharset.h
 	$(CPP) $(CPPFLAGS) $(CFLAGS) control.c > control.i
@@ -2220,7 +2220,7 @@ anymodule $(BASE_MODULES) $(MODULES) : lisp.run lispinit.mem force modprep.fas c
 	    else $(SHELL) ./configure --srcdir=$$m $(MODULE_CONFIGURE_FLAGS); \
 	    fi ) ;\
 	fi
-	CLISP="`pwd`/lisp.run -M `pwd`/lispinit.mem -B `pwd` -E UTF-8 -Epathname 1:1 -norc" ; cd $@ ; dots=`echo $@/ | sed -e 's,[^/][^/]*//*,../,g' -e 's,/$$,,g'` ; $(MAKE) clisp-module CC="$(CC)" LD="$(LD)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" INCLUDES="$$dots" CLFLAGS="$(CLFLAGS)" LIBS="$(LIBS)" RANLIB="$(RANLIB)" CLISP="$$CLISP -q"
+	CLISP="`pwd`/lisp.run -M `pwd`/lispinit.mem -B `pwd` -E UTF-8 -Epathname 1:1 -norc" ; cd $@ ; dots=`echo $@/ | sed -e 's,[^/][^/]*//*,../,g' -e 's,/$$,,g'` ; $(MAKE) clisp-module CC="$(CC)" CPPFLAGS="$(CPPFLAGS)" CFLAGS="$(CFLAGS)" INCLUDES="$$dots" CLFLAGS="$(CLFLAGS)" LIBS="$(LIBS)" RANLIB="$(RANLIB)" CLISP="$$CLISP -q"
 
 base : modular boot $(BASE_MODULES)
 	$(RMRF) base
@@ -2295,21 +2295,21 @@ README.es : _README.es lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj
 clisp.1 : ../doc/_clisp.1 lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c gllib/stdint.h localcharset.h txt2c
 	$(TXT2C) < ../doc/_clisp.1 > txt.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DCOMPILE_STANDALONE $(CLFLAGS) -O0 txt.c -o txt
-	./txt | $(GREP) -v '^ *$$' | sed -e "s,@PLATFORM@,i386-apple-darwin8.11.1,g" > clisp.1
+	./txt | $(GREP) -v '^ *$$' | sed -e "s,@PLATFORM@,i386-apple-darwin9.4.0,g" > clisp.1
 	$(RM) txt.c
 	$(RM) txt
 
 clisp.html : ../doc/_clisp.html lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c gllib/stdint.h localcharset.h txt2c
 	$(TXT2C) < ../doc/_clisp.html > txt.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DCOMPILE_STANDALONE $(CLFLAGS) -O0 txt.c -o txt
-	./txt | sed -e "s,@PLATFORM@,i386-apple-darwin8.11.1,g" > clisp.html
+	./txt | sed -e "s,@PLATFORM@,i386-apple-darwin9.4.0,g" > clisp.html
 	$(RM) txt.c
 	$(RM) txt
 
 clisp-1.html : ../doc/_clisp-1.html lispbibl.c fsubr.c subr.c pseudofun.c constsym.c constobj.c unix.c xthread.c gllib/stdint.h localcharset.h txt2c
 	$(TXT2C) < ../doc/_clisp-1.html > txt.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DCOMPILE_STANDALONE $(CLFLAGS) -O0 txt.c -o txt
-	./txt | sed -e "s,@PLATFORM@,i386-apple-darwin8.11.1,g" > clisp-1.html
+	./txt | sed -e "s,@PLATFORM@,i386-apple-darwin9.4.0,g" > clisp-1.html
 	$(RM) txt.c
 	$(RM) txt
 
@@ -2463,7 +2463,7 @@ COMPRESS=gzip
 PACKDIR = .
 
 # Distribution file
-DISTFILE=$(PACKDIR)/$(TOPDIR)-i386-apple-darwin8.11.1-8.11.1$(PACKEXT)
+DISTFILE=$(PACKDIR)/$(TOPDIR)-i386-apple-darwin9.4.0-9.4.0$(PACKEXT)
 
 distrib : force all modular manualx clisp.c distmakefile
 	$(RMRF) $(TOPDIR) $(DISTFILE) clisp$(PACKEXT)

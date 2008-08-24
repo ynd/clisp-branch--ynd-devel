@@ -11,7 +11,7 @@
 # loading this file, other *unset* `ac_cv_foo' will be assigned the
 # following values.
 
-ac_cv_build=${ac_cv_build=i386-apple-darwin8.11.1}
+ac_cv_build=${ac_cv_build=i386-apple-darwin9.4.0}
 ac_cv_c_bigendian=${ac_cv_c_bigendian=universal}
 ac_cv_c_char_unsigned=${ac_cv_c_char_unsigned=no}
 ac_cv_c_compiler_gnu=${ac_cv_c_compiler_gnu=yes}
@@ -22,8 +22,8 @@ ac_cv_env_CCC_set=
 ac_cv_env_CCC_value=
 ac_cv_env_CC_set=
 ac_cv_env_CC_value=
-ac_cv_env_CFLAGS_set=
-ac_cv_env_CFLAGS_value=
+ac_cv_env_CFLAGS_set=set
+ac_cv_env_CFLAGS_value='-arch i386'
 ac_cv_env_CPPFLAGS_set=
 ac_cv_env_CPPFLAGS_value=
 ac_cv_env_CPP_set=
@@ -171,7 +171,7 @@ ac_cv_func_setkey=${ac_cv_func_setkey=yes}
 ac_cv_func_setlogmask=${ac_cv_func_setlogmask=yes}
 ac_cv_func_setpgid=${ac_cv_func_setpgid=yes}
 ac_cv_func_setpgrp=${ac_cv_func_setpgrp=yes}
-ac_cv_func_setpgrp_posix=${ac_cv_func_setpgrp_posix=no}
+ac_cv_func_setpgrp_posix=${ac_cv_func_setpgrp_posix=yes}
 ac_cv_func_setpriority=${ac_cv_func_setpriority=yes}
 ac_cv_func_setpwent=${ac_cv_func_setpwent=yes}
 ac_cv_func_setregid=${ac_cv_func_setregid=yes}
@@ -223,7 +223,7 @@ ac_cv_have_decl_rl_gnu_readline_p=${ac_cv_have_decl_rl_gnu_readline_p=no}
 ac_cv_have_decl_rl_readline_name=${ac_cv_have_decl_rl_readline_name=yes}
 ac_cv_have_decl_signgam=${ac_cv_have_decl_signgam=yes}
 ac_cv_have_readline=${ac_cv_have_readline=no}
-ac_cv_have_x=${ac_cv_have_x='have_x=yes	ac_x_includes='\''/usr/X11R6/include'\''	ac_x_libraries='\''/usr/X11R6/lib'\'''}
+ac_cv_have_x=${ac_cv_have_x='have_x=yes	ac_x_includes='\''/usr/X11/include'\''	ac_x_libraries='\''/usr/X11/lib'\'''}
 ac_cv_header_arpa_inet_h=${ac_cv_header_arpa_inet_h=yes}
 ac_cv_header_avcall_h=${ac_cv_header_avcall_h=no}
 ac_cv_header_callback_h=${ac_cv_header_callback_h=no}
@@ -281,7 +281,7 @@ ac_cv_header_utmpx_h=${ac_cv_header_utmpx_h=yes}
 ac_cv_header_vfork_h=${ac_cv_header_vfork_h=no}
 ac_cv_header_wchar_h=${ac_cv_header_wchar_h=yes}
 ac_cv_header_wctype_h=${ac_cv_header_wctype_h=yes}
-ac_cv_host=${ac_cv_host=i386-apple-darwin8.11.1}
+ac_cv_host=${ac_cv_host=i386-apple-darwin9.4.0}
 ac_cv_lib_ICE_IceConnectionNumber=${ac_cv_lib_ICE_IceConnectionNumber=yes}
 ac_cv_lib_dir_opendir=${ac_cv_lib_dir_opendir=no}
 ac_cv_libavcall_cppflags=${ac_cv_libavcall_cppflags=}
@@ -367,7 +367,7 @@ acl_cv_hardcode_minus_L=${acl_cv_hardcode_minus_L=no}
 acl_cv_libext=${acl_cv_libext=a}
 acl_cv_libname_spec=${acl_cv_libname_spec='lib$name'}
 acl_cv_library_names_spec=${acl_cv_library_names_spec='$libname$shrext'}
-acl_cv_path_LD=${acl_cv_path_LD=/usr/bin/ld}
+acl_cv_path_LD=${acl_cv_path_LD=/usr/libexec/gcc/i686-apple-darwin9/4.0.1/ld}
 acl_cv_prog_gnu_ld=${acl_cv_prog_gnu_ld=no}
 acl_cv_rpath=${acl_cv_rpath=done}
 acl_cv_shlibext=${acl_cv_shlibext=dylib}
@@ -378,10 +378,10 @@ am_cv_func_iconv=${am_cv_func_iconv=yes}
 am_cv_func_iconv_works=${am_cv_func_iconv_works=yes}
 am_cv_langinfo_codeset=${am_cv_langinfo_codeset=yes}
 am_cv_lib_iconv=${am_cv_lib_iconv=yes}
-am_cv_proto_iconv=${am_cv_proto_iconv='extern size_t iconv (iconv_t cd, const char * *inbuf, size_t *inbytesleft, char * *outbuf, size_t *outbytesleft);'}
-am_cv_proto_iconv_arg1=${am_cv_proto_iconv_arg1=const}
+am_cv_proto_iconv=${am_cv_proto_iconv='extern size_t iconv (iconv_t cd, char * *inbuf, size_t *inbytesleft, char * *outbuf, size_t *outbytesleft);'}
+am_cv_proto_iconv_arg1=${am_cv_proto_iconv_arg1=}
 cl_cv_address_code=${cl_cv_address_code=0x00000000}
-cl_cv_address_malloc=${cl_cv_address_malloc=0x01000000}
+cl_cv_address_malloc=${cl_cv_address_malloc=0x00000000}
 cl_cv_address_shlib=${cl_cv_address_shlib=0xA0000000}
 cl_cv_address_stack=${cl_cv_address_stack=0xBF000000}
 cl_cv_builtin_strlen=${cl_cv_builtin_strlen=yes}
@@ -462,8 +462,8 @@ cl_cv_proto_getrlimit=${cl_cv_proto_getrlimit='extern int getrlimit (int, struct
 cl_cv_proto_getrlimit_arg1=${cl_cv_proto_getrlimit_arg1=int}
 cl_cv_proto_getrusage=${cl_cv_proto_getrusage='extern int getrusage (int, struct rusage *);'}
 cl_cv_proto_getrusage_arg1=${cl_cv_proto_getrusage_arg1=int}
-cl_cv_proto_gettimeofday=${cl_cv_proto_gettimeofday='extern int gettimeofday (struct timeval *, struct timezone *);'}
-cl_cv_proto_gettimeofday_arg2=${cl_cv_proto_gettimeofday_arg2='struct timezone *'}
+cl_cv_proto_gettimeofday=${cl_cv_proto_gettimeofday='extern int gettimeofday (struct timeval *, void *);'}
+cl_cv_proto_gettimeofday_arg2=${cl_cv_proto_gettimeofday_arg2='void *'}
 cl_cv_proto_gettimeofday_dots=${cl_cv_proto_gettimeofday_dots=no}
 cl_cv_proto_inet_addr=${cl_cv_proto_inet_addr='extern unsigned int inet_addr (const char*);'}
 cl_cv_proto_inet_addr_arg1=${cl_cv_proto_inet_addr_arg1=const}
@@ -545,8 +545,8 @@ lt_cv_file_magic_test_file=${lt_cv_file_magic_test_file=}
 lt_cv_ld_exported_symbols_list=${lt_cv_ld_exported_symbols_list=yes}
 lt_cv_ld_reload_flag=${lt_cv_ld_reload_flag=-r}
 lt_cv_objdir=${lt_cv_objdir=.libs}
-lt_cv_path_LD=${lt_cv_path_LD=/usr/bin/ld}
-lt_cv_path_LDCXX=${lt_cv_path_LDCXX=/usr/bin/ld}
+lt_cv_path_LD=${lt_cv_path_LD=/usr/libexec/gcc/i686-apple-darwin9/4.0.1/ld}
+lt_cv_path_LDCXX=${lt_cv_path_LDCXX=/usr/libexec/gcc/i686-apple-darwin9/4.0.1/ld}
 lt_cv_path_NM=${lt_cv_path_NM='/usr/bin/nm -p'}
 lt_cv_path_SED=${lt_cv_path_SED=/sw/bin/sed}
 lt_cv_prog_compiler_c_o=${lt_cv_prog_compiler_c_o=yes}
@@ -565,7 +565,7 @@ lt_cv_sys_global_symbol_pipe=${lt_cv_sys_global_symbol_pipe='sed -n -e '\''s/^.*
 test "${lt_cv_sys_global_symbol_to_c_name_address+set}" = set || lt_cv_sys_global_symbol_to_c_name_address='sed -n -e '\''s/^: \([^ ]*\) $/  {\"\1\", (lt_ptr) 0},/p'\'' -e '\''s/^[BCDEGRST] \([^ ]*\) \([^ ]*\)$/  {"\2", (lt_ptr) \&\2},/p'\'''
 lt_cv_sys_global_symbol_to_cdecl=${lt_cv_sys_global_symbol_to_cdecl='sed -n -e '\''s/^. .* \(.*\)$/extern int \1;/p'\'''}
 lt_cv_sys_lib_dlsearch_path_spec=${lt_cv_sys_lib_dlsearch_path_spec='/usr/local/lib /lib /usr/lib'}
-lt_cv_sys_lib_search_path_spec=${lt_cv_sys_lib_search_path_spec='/usr/lib/gcc/i686-apple-darwin8/4.0.1 /usr/lib /usr/local/lib'}
+lt_cv_sys_lib_search_path_spec=${lt_cv_sys_lib_search_path_spec='/usr/lib/i686-apple-darwin9/4.0.1 /usr/lib /usr/lib/gcc/i686-apple-darwin9/4.0.1 /usr/local/lib'}
 lt_cv_sys_max_cmd_len=${lt_cv_sys_max_cmd_len=196608}
 lt_lt_cv_prog_compiler_c_o=${lt_lt_cv_prog_compiler_c_o='"yes"'}
 lt_lt_cv_prog_compiler_c_o_CXX=${lt_lt_cv_prog_compiler_c_o_CXX='"yes"'}
