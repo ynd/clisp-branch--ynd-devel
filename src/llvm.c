@@ -41,23 +41,26 @@ void gc_scan_jitc_objects (void) {
   #define JITC_STACK_NEXT  1
 #endif
 
-LLVMModuleRef JITC_GLOBAL_MODULE = NULL;
-LLVMExecutionEngineRef JITC_ENGINE = NULL;
-LLVMBuilderRef JITC_BUILDER = NULL;
-LLVMPassManagerRef JITC_PASS_MANAGER = NULL;
+/* C Interface to LLVM objects */
+static LLVMExecutionEngineRef JITC_ENGINE = NULL;
+static LLVMBuilderRef JITC_BUILDER = NULL;
+static LLVMPassManagerRef JITC_PASS_MANAGER = NULL;
+static LLVMModuleRef JITC_GLOBAL_MODULE = NULL;
 
-LLVMValueRef JITC_VALUES = NULL;
-LLVMValueRef JITC_VALUES_COUNT = NULL;
-LLVMValueRef JITC_STACK = NULL;
-LLVMValueRef JITC_NIL = NULL;
-LLVMValueRef JITC_TRUE = NULL;
-LLVMValueRef JITC_UNBOUND = NULL;
-LLVMValueRef JITC_PRINTF = NULL;
-LLVMValueRef JITC_ERROR = NULL;
+/* Global data used by the JIT compiler */
+static LLVMValueRef JITC_VALUES = NULL;
+static LLVMValueRef JITC_VALUES_COUNT = NULL;
+static LLVMValueRef JITC_STACK = NULL;
+static LLVMValueRef JITC_NIL = NULL;
+static LLVMValueRef JITC_TRUE = NULL;
+static LLVMValueRef JITC_UNBOUND = NULL;
+static LLVMValueRef JITC_PRINTF = NULL;
+static LLVMValueRef JITC_ERROR = NULL;
 
 
-// TODO: Declare as many globals as possible as constant
-void jitc_init_compiler () {
+/* Create the builder and initialize global variables. */
+static void jitc_init_compiler () {
+	// TODO: Declare as many globals as possible as constant
   char* error = NULL;
   
   JITC_GLOBAL_MODULE = LLVMModuleCreateWithName("Global Module");
@@ -133,11 +136,13 @@ void jitc_init_compiler () {
     abort();\
   }
 
-void jitc_optimize (LLVMValueRef fun) {
+/* Run the pass manager to optimize the code of a given function. */
+static void jitc_optimize (LLVMValueRef fun) {
   LLVMRunFunctionPassManager(JITC_PASS_MANAGER, fun);
 }
 
-void jitc_print_value (const char *mes, LLVMValueRef val) {
+/* Add instructions that prints the given value */
+static void jitc_print_value (const char *mes, LLVMValueRef val) {
   LLVMValueRef str = LLVMAddGlobal(JITC_GLOBAL_MODULE,
                                     LLVMArrayType(LLVMInt8Type(), strlen(mes)),
                                     "");
@@ -149,7 +154,8 @@ void jitc_print_value (const char *mes, LLVMValueRef val) {
   LLVMBuildCall(JITC_BUILDER, JITC_PRINTF, printf_args, 2, "");
 }
 
-void jitc_error (condition_t type, const char *msg) {
+/* Add instructions that call clisp's error function */
+static void jitc_error (condition_t type, const char *msg) {
   LLVMValueRef str = LLVMGetNamedGlobal(JITC_GLOBAL_MODULE, msg);
   if(!str) {
     str = LLVMAddGlobal(JITC_GLOBAL_MODULE,
@@ -165,28 +171,33 @@ void jitc_error (condition_t type, const char *msg) {
   LLVMBuildUnreachable(JITC_BUILDER);
 }
 
-LLVMValueRef jitc_getptr_values (int n) {
+/* Add intrusctions that get the address of the n-th element of the "values" table. */
+static LLVMValueRef jitc_getptr_values (int n) {
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
                         LLVMConstInt(LLVMInt32Type(), n, 0)};
   return LLVMConstGEP(JITC_VALUES, idx, 2);
 }
 
-LLVMValueRef jitc_get_values (int n) {
+/* Add intrusctions that get the n-th element of the "values" table. */
+static LLVMValueRef jitc_get_values (int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_values(n), "");
 }
 
-void jitc_set_mvcount (int n) {
+/* Add instructions that set mvcount to the given value */
+static void jitc_set_mvcount (int n) {
   LLVMBuildStore(JITC_BUILDER, LLVMConstInt(LLVMInt32Type(), n, 0), JITC_VALUES_COUNT);
 }
 
-void jitc_set_values_1 (LLVMValueRef val) {
+/* Add instructions that set the first element of the values table to the given value. */
+static void jitc_set_values_1 (LLVMValueRef val) {
   LLVMBuildStore(JITC_BUILDER, LLVMConstInt(LLVMInt32Type(), 1, 0), JITC_VALUES_COUNT);
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
                         LLVMConstInt(LLVMInt32Type(), 0, 0)};
   LLVMBuildStore(JITC_BUILDER, val, LLVMConstGEP(JITC_VALUES, idx, 2));
 }
 
-LLVMValueRef jitc_getptr_stack (int n) {
+/* Add instructions to get the address of the n-th element of the stack. */
+static LLVMValueRef jitc_getptr_stack (int n) {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
   #ifdef STACK_DOWN
     LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
@@ -196,11 +207,13 @@ LLVMValueRef jitc_getptr_stack (int n) {
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_stack (int n) {
+/* Add instructions that get the n-th element of the stack. */
+static LLVMValueRef jitc_get_stack (int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_stack(n), "");
 }
 
-LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
+/* Add instructions to get the address of the n-th element of the stack using a prefetched top. */
+static LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
   #ifdef STACK_DOWN
     LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
   #else
@@ -209,11 +222,13 @@ LLVMValueRef jitc_getptr_stack_with (int n, LLVMValueRef top) {
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_stack_with (int n, LLVMValueRef top) {
+/* Add instructions to get the n-th element of the stack using a prefetched top. */
+static LLVMValueRef jitc_get_stack_with (int n, LLVMValueRef top) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_stack_with(n, top), "");
 }
 
-LLVMValueRef jitc_getptr_frame (LLVMValueRef top, int n) {
+/* Add instructions that get the address of the n-th element of a given frame. */
+static LLVMValueRef jitc_getptr_frame (LLVMValueRef top, int n) {
   #ifdef STACK_DOWN
     LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
   #else
@@ -224,18 +239,21 @@ LLVMValueRef jitc_getptr_frame (LLVMValueRef top, int n) {
   return LLVMBuildGEP(JITC_BUILDER, conv, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_frame (LLVMValueRef top, int n) {
+/* Add instructions that get the n-th element of a given frame. */
+static LLVMValueRef jitc_get_frame (LLVMValueRef top, int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_frame(top, n), "");
 }
 
-LLVMValueRef jitc_pop_stack () {
+/* Add instruction that perform a pop of the stack */
+static LLVMValueRef jitc_pop_stack () {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
   LLVMBuildStore(JITC_BUILDER, jitc_getptr_stack_with(0, top), JITC_STACK);
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), -JITC_STACK_NEXT, 1)};
   return LLVMBuildLoad(JITC_BUILDER, LLVMBuildGEP(JITC_BUILDER, top, idx, 1, ""), "");
 }
 
-void jitc_push_stack (LLVMValueRef val) {
+/* Add instructions that perform a push of the given value on the stack. */
+static void jitc_push_stack (LLVMValueRef val) {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, JITC_STACK, "TOP");
   LLVMBuildStore(JITC_BUILDER, val, jitc_getptr_stack_with(-1, top));
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), JITC_STACK_NEXT, 1)};
@@ -243,14 +261,16 @@ void jitc_push_stack (LLVMValueRef val) {
   LLVMBuildStore(JITC_BUILDER, ptr, JITC_STACK);
 }
 
-void jitc_push_stack_with (LLVMValueRef val, LLVMValueRef top) {
+/* Add instructions that perform a push of the given value on the stack using a prefetched top. */
+static void jitc_push_stack_with (LLVMValueRef val, LLVMValueRef top) {
   LLVMBuildStore(JITC_BUILDER, val, jitc_getptr_stack_with(-1, top));
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), JITC_STACK_NEXT, 1)};
   LLVMValueRef ptr = LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "NEW_TOP");
   LLVMBuildStore(JITC_BUILDER, ptr, JITC_STACK);
 }
 
-void jitc_repeat (int n, LLVMBasicBlockRef repeat, LLVMBasicBlockRef prev, LLVMBasicBlockRef next) {
+/* Add instructions that repeat a given basic block n times. */
+static void jitc_repeat (int n, LLVMBasicBlockRef repeat, LLVMBasicBlockRef prev, LLVMBasicBlockRef next) {
   LLVMBasicBlockRef bb = LLVMGetInsertBlock(JITC_BUILDER);
   LLVMBasicBlockRef cond = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "cond");
   LLVMPositionBuilderAtEnd(JITC_BUILDER, prev);
@@ -272,7 +292,8 @@ void jitc_repeat (int n, LLVMBasicBlockRef repeat, LLVMBasicBlockRef prev, LLVMB
   LLVMPositionBuilderAtEnd(JITC_BUILDER, bb);
 }
 
-LLVMValueRef jitc_getptr_cconst (LLVMValueRef closure, int n) {
+/* Add instructions that get the address the n-th constant of a closure. */
+static LLVMValueRef jitc_getptr_cconst (LLVMValueRef closure, int n) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, closure, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Cclosure, clos_consts);
   LLVMValueRef cconsts = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
@@ -282,11 +303,13 @@ LLVMValueRef jitc_getptr_cconst (LLVMValueRef closure, int n) {
   return LLVMBuildGEP(JITC_BUILDER, res, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_cconst (LLVMValueRef closure, int n) {
+/* Add instructions to get the n-th constant of a closure. */
+static LLVMValueRef jitc_get_cconst (LLVMValueRef closure, int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_cconst(closure, n), "");
 }
 
-LLVMValueRef jitc_getptr_clos_name_or_class_version (LLVMValueRef clos) {
+/* Add instructions that return the name or class version of a closure. */
+static LLVMValueRef jitc_getptr_clos_name_or_class_version (LLVMValueRef clos) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, clos, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Cclosure, clos_name_or_class_version);
   LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
@@ -295,17 +318,20 @@ LLVMValueRef jitc_getptr_clos_name_or_class_version (LLVMValueRef clos) {
   return res;
 }
 
-LLVMValueRef jitc_getptr_sp (LLVMValueRef topptr, int n) {
+/* Add instructions that get the address of the n-th element of the sp stack. */
+static LLVMValueRef jitc_getptr_sp (LLVMValueRef topptr, int n) {
   LLVMValueRef top = LLVMBuildLoad(JITC_BUILDER, topptr, "");
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), n, 1)};
   return LLVMBuildGEP(JITC_BUILDER, top, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_sp (LLVMValueRef topptr, int n) {
+/* Add instructions that get the n-th element of the sp stack. */
+static LLVMValueRef jitc_get_sp (LLVMValueRef topptr, int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_sp(topptr, n), "");
 }
 
-LLVMValueRef jitc_getptr_svecdata (LLVMValueRef svec, int n) {
+/* Add instructions that get the address of the n-th element of a given svector. */
+static LLVMValueRef jitc_getptr_svecdata (LLVMValueRef svec, int n) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER,
                                     svec,
                                     LLVMInt64Type(), "");
@@ -317,20 +343,24 @@ LLVMValueRef jitc_getptr_svecdata (LLVMValueRef svec, int n) {
   return LLVMBuildGEP(JITC_BUILDER, res, idx, 1, "");
 }
 
-LLVMValueRef jitc_get_svecdata (LLVMValueRef svec, int n) {
+/* Add instructions that get the n-th element of a given svector. */
+static LLVMValueRef jitc_get_svecdata (LLVMValueRef svec, int n) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_svecdata(svec, n), "");
 }
 
-LLVMValueRef jitc_getptr_venv (LLVMValueRef closure) {
+/* Add instructions that get the venv of a given closure. */
+static LLVMValueRef jitc_getptr_venv (LLVMValueRef closure) {
   return jitc_getptr_cconst(closure, 0);
 }
 
-LLVMValueRef jitc_is_symbound (LLVMValueRef sym) {
+/* Add instructions that verify if a given symbol is bound. */
+static LLVMValueRef jitc_is_symbound (LLVMValueRef sym) {
   LLVMValueRef If = LLVMBuildICmp(JITC_BUILDER, LLVMIntNE, sym, JITC_UNBOUND, "is_unbound");
   return If;
 }
 
-LLVMValueRef jitc_getptr_symvalue (LLVMValueRef sym) {
+/* Add instructions that get the address of the value of a given symbol. */
+static LLVMValueRef jitc_getptr_symvalue (LLVMValueRef sym) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, sym, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Symbol, symvalue);
   LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
@@ -339,11 +369,13 @@ LLVMValueRef jitc_getptr_symvalue (LLVMValueRef sym) {
   return res;
 }
 
-LLVMValueRef jitc_get_symvalue (LLVMValueRef sym) {
+/* Add instructions that get the value of a given symbol. */
+static LLVMValueRef jitc_get_symvalue (LLVMValueRef sym) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_symvalue(sym), "");
 }
 
-LLVMValueRef jitc_getptr_symflags (LLVMValueRef sym) {
+/* Add instructins that get the address of a given symbol's flags. */
+static LLVMValueRef jitc_getptr_symflags (LLVMValueRef sym) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, sym, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Symbol, header_flags);
   LLVMValueRef data = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
@@ -352,18 +384,21 @@ LLVMValueRef jitc_getptr_symflags (LLVMValueRef sym) {
   return res;
 }
 
-LLVMValueRef jitc_get_symflags (LLVMValueRef sym) {
+/* Add instructions that get a given symbol's flags. */
+static LLVMValueRef jitc_get_symflags (LLVMValueRef sym) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_symflags(sym), "");
 }
 
-LLVMValueRef jitc_is_symconst (LLVMValueRef sym) {
+/* Add instructions that verify if a given symbol is constant. */
+static LLVMValueRef jitc_is_symconst (LLVMValueRef sym) {
   LLVMValueRef mask = LLVMConstInt(LLVMInt32Type(), bit(var_bit0_hf)|bit(var_bit1_hf), 1);
   LLVMValueRef flags = LLVMBuildNot(JITC_BUILDER, jitc_get_symflags(sym), "");
   LLVMValueRef res = LLVMBuildAnd(JITC_BUILDER, mask, flags, "");
   return LLVMBuildICmp(JITC_BUILDER, LLVMIntEQ, res, LLVMConstInt(LLVMInt32Type(), 0, 1), "");
 }
 
-LLVMValueRef jitc_isclosure (LLVMValueRef obj) {
+/* Add instruction that verify if the given object is a closure. */
+static LLVMValueRef jitc_isclosure (LLVMValueRef obj) {
   LLVMValueRef converted = LLVMBuildPtrToInt(JITC_BUILDER, obj, LLVMInt64Type(), "");
   LLVMValueRef offset = jitc_get_offset(Cclosure, tfl);
   LLVMValueRef tmp = LLVMBuildAdd(JITC_BUILDER, converted, offset, "");
@@ -375,7 +410,8 @@ LLVMValueRef jitc_isclosure (LLVMValueRef obj) {
   return tmp;
 }
 
-LLVMValueRef jitc_getptr_closname (LLVMValueRef clos) {
+/* Add instructions to get the address of a closure's name. */
+static LLVMValueRef jitc_getptr_closname (LLVMValueRef clos) {
   LLVMBasicBlockRef prev = LLVMGetInsertBlock(JITC_BUILDER);
   LLVMBasicBlockRef bb_false = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "");
   LLVMBasicBlockRef bb_true = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(prev), "");
@@ -399,11 +435,13 @@ LLVMValueRef jitc_getptr_closname (LLVMValueRef clos) {
   return LLVMBuildLoad(JITC_BUILDER, res, "");
 }
 
-LLVMValueRef jitc_get_closname (LLVMValueRef clos) {
+ /* Add instructions to get a given closure's name. */
+static LLVMValueRef jitc_get_closname (LLVMValueRef clos) {
   return LLVMBuildLoad(JITC_BUILDER, jitc_getptr_closname(clos), "");
 }
 
-void jitc_finish_frame (int type, int size) {
+/* Add instructions to push an element of the stack to finish a frame of the given type and size. */
+static void jitc_finish_frame (int type, int size) {
   int w = makebottomword(type, size*sizeof(gcv_object_t));
   LLVMValueRef word = LLVMConstInt(LLVMInt64Type(), w, 0);
   jitc_push_stack(LLVMConstIntToPtr(word, JITC_OBJECT_TYPE));
