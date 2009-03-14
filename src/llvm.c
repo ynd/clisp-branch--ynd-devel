@@ -131,7 +131,7 @@ static void jitc_init_compiler () {
   }
 #define jitc_end2()\
     LLVMBuildRetVoid(JITC_BUILDER);\
-    jitc_optimize(fun);\
+    /*jitc_optimize(fun);*/\
     LLVMDumpModule(JITC_GLOBAL_MODULE);\
     abort();\
   }
@@ -194,6 +194,35 @@ static void jitc_set_values_1 (LLVMValueRef val) {
   LLVMValueRef idx[] = {LLVMConstInt(LLVMInt32Type(), 0, 0),
                         LLVMConstInt(LLVMInt32Type(), 0, 0)};
   LLVMBuildStore(JITC_BUILDER, val, LLVMConstGEP(JITC_VALUES, idx, 2));
+}
+
+/* Add instructions to skip one element on the stack given the stack's pointer. */
+static LLVMValueRef jitc_skip_stack (LLVMValueRef stackptr, int n) {
+  LLVMValueRef stack = LLVMBuildPtrToInt(JITC_BUILDER, stackptr, LLVMInt64Type(), "");
+  LLVMValueRef skips = LLVMConstInt(LLVMInt64Type(), n * sizeof(gcv_object_t), 0);
+  #ifdef STACK_DOWN
+    LLVMValueRef tmp = LLVMBuildAdd(JITC_BUILDER, stack, skips, "");
+  #else
+    LLVMValueRef tmp = LLVMBuildSub(JITC_BUILDER, stack, skips, "");
+  #endif
+  return LLVMBuildIntToPtr(JITC_BUILDER, tmp, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+}
+
+/* Add instructions to set the top of the stack to a given address. */
+static void jitc_set_stack (LLVMValueRef new_stak) {
+  return LLVMBuildStore(JITC_BUILDER, new_stak, JITC_STACK);
+}
+
+/* Add instructions to get an address that can traverse through the Stack. */
+static LLVMValueRef jitc_getpointable_stackptr (LLVMValueRef stackptr) {
+  #ifdef STACK_DOWN
+    return stackptr;
+  #else
+    LLVMValueRef stack = LLVMBuildPtrToInt(JITC_BUILDER, stackptr, LLVMInt64Type(), "");
+    LLVMValueRef skips = LLVMConstInt(LLVMInt64Type(), sizeof(gcv_object_t), 0);
+    LLVMValueRef tmp = LLVMBuildSub(JITC_BUILDER, stack, skips, "");
+    return LLVMBuildIntToPtr(JITC_BUILDER, tmp, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  #endif
 }
 
 /* Add instructions to get the address of the n-th element of the stack. */
@@ -445,6 +474,30 @@ static void jitc_finish_frame (int type, int size) {
   int w = makebottomword(type, size*sizeof(gcv_object_t));
   LLVMValueRef word = LLVMConstInt(LLVMInt64Type(), w, 0);
   jitc_push_stack(LLVMConstIntToPtr(word, JITC_OBJECT_TYPE));
+}
+
+/* Add instructions that return the size of a frame given a frame info word. */
+static LLVMValueRef jitc_getsize_frame (LLVMValueRef frame_info) {
+  LLVMValueRef frame_info_int = LLVMBuildPtrToInt(JITC_BUILDER, frame_info, LLVMInt64Type(), "");
+  return LLVMBuildAnd(JITC_BUILDER, frame_info_int, LLVMConstInt(LLVMInt64Type(), wbit(FB1)-1, 0), "");
+}
+
+/* Add instructions that return the the address of the top of a frame given the address of a frame info word. */
+static LLVMValueRef jitc_gettop_frame (LLVMValueRef frame_info_ptr) {
+  LLVMValueRef frame_info = LLVMBuildLoad(JITC_BUILDER, frame_info_ptr, "");
+  LLVMValueRef frame_size = jitc_getsize_frame(frame_info);
+  LLVMValueRef frame_info_ptr_int = LLVMBuildPtrToInt(JITC_BUILDER, frame_info_ptr, LLVMInt64Type(), "");
+  
+  #ifdef STACK_UP
+    LLVMValueRef obj_size = LLVMConstInt(LLVMInt64Type(), sizeof(gcv_object_t), 0);
+    LLVMValueRef tmp = LLVMBuildAdd(JITC_BUILDER, frame_info_ptr_int, obj_size, "");
+    tmp = LLVMBuildSub(JITC_BUILDER, tmp, frame_size, "");
+    return LLVMBuildIntToPtr(JITC_BUILDER, tmp, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  #endif
+  #ifdef STACK_DOWN
+    LLVMValueRef tmp = LLVMBuildAdd(JITC_BUILDER, frame_info_ptr_int, frame_size, "");
+    return LLVMBuildIntToPtr(JITC_BUILDER, tmp, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+  #endif
 }
 
 /* ------ JITC Main functions ------ */
@@ -1131,23 +1184,56 @@ static Values jitc_compile (object closure_in, Sbvector codeptr,
       // LLVMBuildStore(JITC_BUILDER, jitc_get_values(0), jitc_getptr_symvalue(sym));
       // jitc_end();
     } goto next_byte;
-    CASE cod_unbind1:           /* (UNBIND1) */
-      #if STACKCHECKC
-      if (!(framecode(STACK_0) == DYNBIND_frame_info))
-        GOTO_ERROR(error_STACK_putt);
-      #endif
-      { /* unwind variable-binding-frame: */
-        var gcv_object_t* new_STACK = topofframe(STACK_0); /* pointer above frame */
-        var gcv_object_t* frame_end = STACKpointable(new_STACK);
-        var gcv_object_t* bindingptr = &STACK_1; /* begin of bindings */
-        /* bindingptr loops upwards through the bindings */
-        while (bindingptr != frame_end) {
-          /* write back old value: */
-          Symbol_value(*(bindingptr STACKop 0)) = *(bindingptr STACKop 1);
-          bindingptr skipSTACKop 2; /* next binding */
-        }
-        /* set STACK newly, thus unwind frame: */
-        setSTACK(STACK = new_STACK);
+    CASE cod_unbind1: {         /* (UNBIND1) */
+        // #if STACKCHECKC
+        // if (!(framecode(STACK_0) == DYNBIND_frame_info))
+        //   GOTO_ERROR(error_STACK_putt);
+        // #endif
+        // /* unwind variable-binding-frame: */
+        // var gcv_object_t* new_STACK = topofframe(STACK_0); /* pointer above frame */
+        // var gcv_object_t* frame_end = STACKpointable(new_STACK);
+        // var gcv_object_t* bindingptr = &STACK_1; /* begin of bindings */
+        // /* bindingptr loops upwards through the bindings */
+        // while (bindingptr != frame_end) {
+        //   /* write back old value: */
+        //   Symbol_value(*(bindingptr STACKop 0)) = *(bindingptr STACKop 1);
+        //   bindingptr skipSTACKop 2; /* next binding */
+        // }
+        // /* set STACK newly, thus unwind frame: */
+        // setSTACK(STACK = new_STACK);
+        jitc_begin();
+        LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "(UNBIND1)");
+        LLVMBasicBlockRef cond = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(entry), "");
+        LLVMBasicBlockRef loop = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(entry), "");
+        LLVMBasicBlockRef end = LLVMAppendBasicBlock(LLVMGetBasicBlockParent(entry), "");
+        
+        LLVMPositionBuilderAtEnd(JITC_BUILDER, entry);
+        LLVMValueRef frame_top = jitc_gettop_frame(jitc_getptr_stack(0));
+        LLVMValueRef frame_end = LLVMBuildPtrToInt(JITC_BUILDER, jitc_getpointable_stackptr(frame_top), LLVMInt64Type(), "");
+        LLVMValueRef bindings = LLVMBuildAlloca(JITC_BUILDER, LLVMPointerType(JITC_OBJECT_TYPE, 0), "");
+        LLVMBuildStore(JITC_BUILDER, jitc_getptr_stack(1), bindings);
+        LLVMBuildBr(JITC_BUILDER, cond);
+
+        LLVMPositionBuilderAtEnd(JITC_BUILDER, cond);
+        LLVMValueRef current = LLVMBuildPtrToInt(JITC_BUILDER, LLVMBuildLoad(JITC_BUILDER, bindings, ""),
+                                                  LLVMInt64Type(), "");
+        LLVMValueRef If = LLVMBuildICmp(JITC_BUILDER, LLVMIntNE, current, frame_end, "");
+        LLVMBuildCondBr(JITC_BUILDER, If, loop, end);
+
+        LLVMPositionBuilderAtEnd(JITC_BUILDER, loop);
+        current = LLVMBuildLoad(JITC_BUILDER, bindings, "");
+        LLVMValueRef val = LLVMBuildLoad(JITC_BUILDER, jitc_skip_stack(current, 1), "");
+        LLVMValueRef sym = LLVMBuildLoad(JITC_BUILDER, jitc_skip_stack(current, 0), "");
+        LLVMValueRef symvalue_ptr = jitc_getptr_symvalue(sym);
+        LLVMBuildStore(JITC_BUILDER, val, symvalue_ptr);
+        LLVMBuildStore(JITC_BUILDER, jitc_skip_stack(current, 2), bindings);
+        LLVMBuildBr(JITC_BUILDER, cond);
+        
+        LLVMPositionBuilderAtEnd(JITC_BUILDER, end);
+        current = LLVMBuildLoad(JITC_BUILDER, bindings, "");
+        jitc_set_stack(frame_top);
+        
+        jitc_end();
       } goto next_byte;
     CASE cod_unbind: {          /* (UNBIND n) */
       var uintC n;
